@@ -1,0 +1,24 @@
+Package: STEvaluationExt
+Version: 0.5-2
+Date: 2021-03-12
+Title: Evaluation procedures for forecasting with spatio-temporal data
+Description: Code supporting journal article: Oliveira, M., Torgo, L., & Santos Costa, V. (2021). Evaluation Procedures for Forecasting with Spatiotemporal Data. Mathematics, 9(6), 691. MDPI AG. Retrieved from http://dx.doi.org/10.3390/math9060691
+Authors@R: c(
+    person("Mariana", "Oliveira", email="mariana.r.oliveira@inesctec.pt",role = c("cre", "aut")),
+    person("Luis", "Torgo", role="dgs"),
+    person("Vitor", "Santos Costa", role="dgs"))
+Depends: R (>= 3.1.0)
+Imports: assertthat (>= 0.2.0), dplyr (>= 0.7.4), foreach (>= 1.4.3),
+        Hmisc (>= 4.0-0), lwgeom (>= 0.1-3), sf (>= 0.6-0), spdep (>=
+        0.6-8), starma (>= 1.3), stringr (>= 1.2.0), tidyr (>= 0.6.0),
+        wavethresh (>= 4.6.8), UBL (>= 0.0.6), lubridate(>= 1.7.9.2),
+        xts (>= 0.12.1)
+Suggests: doParallel (>= 1.0.10), DMwR2 (>= 0.0.2), ggplot2 (>= 2.1.0),
+        ranger (>= 0.9.0), uba (>= 0.7.8), knitr (>= 1.6), rmarkdown
+        (>= 1.17)
+License: GPL (>=2)
+Encoding: latin1
+RoxygenNote: 7.1.1
+VignetteBuilder: knitr
+NeedsCompilation: no
+Packaged: 2021-01-15 18:35:20 UTC; moliveira

@@ -1,0 +1,27 @@
+year <- sub("-.*", "", meta$Date)
+note <- sprintf("R package version %s", meta$Version)
+
+     
+bibentry(bibtype = "Article",
+         title = "Evaluation Procedures for Forecasting with Spatiotemporal Data",
+         author = c(person("Mariana", "Oliveira"),
+                    person("Luis", "Torgo"),
+                    person("Vitor", "Santos Costa")),
+        journal= "Mathematics",
+         year = "2021",
+         publisher="MDPI", 
+         volume="9",
+         issn="2227-7390",
+         number="6",
+         pages="691",
+         doi="10.3390/math9060691")
+         
+         
+bibentry(bibtype = "Manual",
+         title = "{STEvaluationExt}: Evaluation procedures for forecasting with spatiotemporal data",
+         author = c(person("Mariana", "Oliveira"),
+                    person("Luis", "Torgo"),
+                    person("Vitor", "Santos Costa")),
+         year = year,
+         note = note,
+         url = "https://github.com/mrfoliveira/STEvaluation-MDPI2021")
