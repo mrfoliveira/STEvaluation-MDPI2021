@@ -1,4 +1,4 @@
-# Evaluation procedures for forecasting with spatiotemporal data
+# Evaluation Procedures for Forecasting with Spatiotemporal Data
 
 This repository contains the research compendium of "Evaluation procedures for forecasting with spatiotemporal data", authored by Mariana Oliveira, Luis Torgo, and Vitor Santos Costa, and published at the Mathematics Journal, on the Special Issue "Spatial Statistics and Its Application".
 
@@ -33,7 +33,7 @@ if(!("ggplot2" in installed.packages())) install.packages("ggplot2")
 
 ## Reproducing experiments
 
-To run experiments, run the following lines from the main directory:
+To run experiments, run the following lines:
 
 ```
 library(STEvaluationExt)
@@ -48,3 +48,10 @@ source(paste0(PATH, "/step3_read_data.R"))
 source(paste0(PATH, "/step4_get_indicators.R"))
 source(paste0(PATH, "/step5_real_experiments.R"))
 ```
+
+To generate an HTML report containing all figures and tables in the article, run:
+
+```
+knitr::knit(system.file("inst/ExtensionReport.Rmd", package="STEvaluationExt"))
+```
+

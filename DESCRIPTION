@@ -2,7 +2,7 @@ Package: STEvaluationExt
 Version: 0.5-2
 Date: 2021-03-12
 Title: Evaluation procedures for forecasting with spatio-temporal data
-Description: Code supporting journal article: Oliveira, M., Torgo, L., & Santos Costa, V. (2021). Evaluation Procedures for Forecasting with Spatiotemporal Data. Mathematics, 9(6), 691. MDPI AG. Retrieved from http://dx.doi.org/10.3390/math9060691
+Description: Code supporting journal article: Oliveira, M., Torgo, L., & Santos Costa, V. (2021). Evaluation Procedures for Forecasting with Spatiotemporal Data. Mathematics, 9(6), 691. MDPI AG. Retrieved from http://dx.doi.org/10.3390/math9060691.
 Authors@R: c(
     person("Mariana", "Oliveira", email="mariana.r.oliveira@inesctec.pt",role = c("cre", "aut")),
     person("Luis", "Torgo", role="dgs"),

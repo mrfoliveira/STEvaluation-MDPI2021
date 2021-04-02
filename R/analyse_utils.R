@@ -179,6 +179,36 @@ abbr_est_names <- function(x){
   x
 }
 
+#' Abbreviate default experiment method names for use in plots
+#'
+#' @param x a vector of method names
+#' @export
+#'
+#' @return A vector of abbreviated names
+abbr_fold_alloc_names <- function(x){
+  x <- gsub("all", "a", x)
+  x <- gsub("block", "b", x)
+  x <- gsub("rand", "r", x)
+  x <- gsub("contig", "c", x)
+  x <- gsub("checker", "s", x)
+  
+  x <- gsub("\\Tr", "tR", x)
+  x <- gsub("\\Ta", "tA", x)
+  x <- gsub("\\Tb", "tB", x)
+  x <- gsub("\\SPs", "sS", x)
+  x <- gsub("\\SPc", "sC", x)
+  x <- gsub("\\SPr", "sR", x)
+  x <- gsub("\\SPa", "sA", x)
+  
+  x <- gsub("\\_t", "t", x)
+  x <- gsub("\\_s", "s", x)
+  x <- gsub("growing", "grW", x)
+  x <- gsub("liding", "\\_slW", x)
+  x <- gsub("slW", "\\_slW", x)
+  x <- gsub("\\_\\_slW", "\\_slW", x)
+  
+  x
+}
 
 #' Compress results from all (artificial) experiments
 #'
