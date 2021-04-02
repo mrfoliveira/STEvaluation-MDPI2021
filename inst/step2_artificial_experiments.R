@@ -193,7 +193,7 @@ for(model in MODELS){
                                  eval.pars=EVAL_PARS,
                                  seed=SEED, site_id="site", time="time",
                                  .estParallel = TRUE,
-                                 .compress=FALSE, .progress=paste0(RES_PATH, model, "/res"))
+                                 .compress=FALSE, .progress=paste0(RES_PATH, model, "/artif_res"))
       rm(res);gc();
     }
   }

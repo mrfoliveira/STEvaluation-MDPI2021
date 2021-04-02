@@ -1,0 +1,706 @@
+---
+title: "Report Extension"
+author: "Mariana Oliveira, Luís Torgo, and Vítor Santos Costa"
+date: "March 12, 2021"
+html_document:
+    toc: true
+    toc_depth: 4
+    self_contained: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.path = "figs/",
+               dev=c("png","cairo_ps"), fig.width = 8)
+
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+
+library(tidyverse)
+library(sf)
+library(ggplot2)
+library(ggmap)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(spdep)
+library(gridExtra)
+library(STEvaluationExt)
+source("../R/analyse_utils.R")
+
+#DATA_PATH <- "../data/"
+#RES_PATH <- "../results/"
+DATA_PATH <- ""
+RES_PATH <- ""
+```
+
+```{r load-data}
+load(paste0(DATA_PATH, "dfs.Rdata"))
+load(paste0(DATA_PATH, "inds_df.Rdata"))
+
+IMBALANCED_DS <- c("MESApol", "NCDCPprec", "TCEQOozone",
+                   "TCEQTtemp", "TCEQWwind", "RURALpm10",
+                   "BEIJno", "BEIJpm10", "BEIJwind", "BEIJpm25")
+cbPal <- c("#5e3c99", "#e66101")
+```
+
+
+# Data and Methods
+
+```{r global-plot, fig.width=8}
+ggmap_zooms <- c(COOKwater=15)
+
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+all_stations <- dplyr::bind_rows(lapply(names(ggmap_zooms), function(x){ 
+  d<- data_list[[x]]$stations; 
+  d$station <- as.character(d$station); 
+  d$data <- x ; 
+  d[["data_source"]] <- sapply(str_extract_all(string = x, pattern = "[A-Z]"), paste0, collapse="")
+  d %>% st_transform(4326)}))
+
+ggplot(data = world) + 
+  geom_sf() + 
+  geom_sf(data=all_stations, aes(color=data_source), size=0.1) +
+  theme(legend.position="bottom") +
+  guides(colour = guide_legend(nrow = 1))
+
+```
+
+**Figure 7.** Global distribution of locations included in each  data   source.
+
+```{r local-neib-plots}
+for(dfnm in names(ggmap_zooms)){
+  print(dfnm)
+  stations <- data_list[[dfnm]]$stations %>% 
+    st_transform(4326)
+  bbox <- st_bbox(st_union(stations))
+  
+  back_map <- get_stamenmap( bbox = c(bbox["xmin"][[1]] - 0.1*(bbox["xmax"][[1]]-bbox["xmin"][[1]]), 
+                                      bbox["ymin"][[1]] - 0.1*(bbox["ymax"][[1]]-bbox["ymin"][[1]]), 
+                                      bbox["xmax"][[1]] + 0.1*(bbox["xmax"][[1]]-bbox["xmin"][[1]]),
+                                      bbox["ymax"][[1]] + 0.1*(bbox["ymax"][[1]]-bbox["ymin"][[1]])),
+                             zoom = ggmap_zooms[dfnm][[1]],
+                             maptype = "watercolor")
+  
+  ALPHA <- 0.25
+  BETAS <- c(0.0250, 0.0375, 0.0500)
+  radius <- BETAS / ALPHA
+  s.dist <- get_spatial_dist_mat(stations, site_id = "station")
+  max_dist <- max(as.vector(s.dist)) * radius
+  # print(c(length(which(s.dist <= max(max_dist))),
+  #        length(which(s.dist <= max(max_dist))) / length(which(!is.na(s.dist)))))
+  
+  rep_stations <- data.frame(SACtemp=c(-70.75,-44.75), SRdif=c(-122.95,38.95))
+  for(d in max_dist){
+    # distance is in km
+    nbs <- spdep::dnearneigh(stations, 0, d / 1E3)  
+    nbs_df <- nb2ggplot(nbs, stations)
+    
+    gg <- ggmap(back_map) +
+      #ggplot(world) + geom_sf() +
+      geom_point(data=nbs_df, aes(x=lon, y=lat))
+    
+    if(dfnm %in% colnames(rep_stations)) 
+      nbs_df <- nbs_df %>% filter(lon==rep_stations[1,dfnm], 
+                                        lat==rep_stations[2,dfnm])
+    gg <- gg + 
+      geom_segment(data=nbs_df, aes(x=lon, y=lat, xend=lon_to, yend=lat_to)) 
+    
+    if(dfnm %in% colnames(rep_stations)){
+      gg <- gg + geom_point(data=nbs_df, aes(x=lon, y=lat), colour="darkred")
+    }
+    
+    print(gg)
+  }
+}
+
+```
+
+**Figure 8.** Spatial neighbours at maximum spatial radius within each spatiotemporal neighbourhood with $\alpha=0.25$ and different values of $\beta$ for dataset Cook Agronomy Farm.
+
+
+**Table 2.** Description of real-world datasets, including the total number of observations that are available,   and   the percentage of all possible combinations of location and time-stamp that they represent.
+
+```{r}
+dfs_desc <- t(sapply(data_list, function(x){
+  
+  tab <- data.frame(ts=length(unique(x$df$time)), ss=length(unique(x$df$station)), true_nr=nrow(x$df))
+  tab$nr <- tab$ss*tab$ts
+  tab$avail <- tab$true_nr/tab$nr
+  
+  y <- x$df$value
+  ph <- uba::phi.control(y, method="extremes", coef=1.5)
+  ls <- uba::loss.control(y)
+  phi <- uba::phi(y = y, phi.parms = ph)
+  
+  as.data.frame(tab)
+}))
+
+dfs_desc <- cbind(data.frame(data=rownames(dfs_desc)),
+                  apply(dfs_desc,2,unlist))[,-5]
+rownames(dfs_desc) <- NULL
+
+colnames(dfs_desc) <- c("data", "timeIDs", "locIDs", "insts", "avail")
+
+knitr::kable(dfs_desc, digits=2)
+```
+
+
+**Table 3.** Parameter $\alpha$ and distances between stations (in kilometres)    and   spatial radius of each spatiotemporal neighbourhood when temporal distance is zero} ($d_T=0$), $r_i = \beta_i/\alpha$, $\beta \in \{0.0250,\ 0.0375,\ 0.0500\}$.
+
+```{r}
+dist_data <- bind_rows(lapply(1:length(inds_df), function(i){
+  x <- inds_df[[i]]
+  dists <- as.vector(sf::st_distance(x$stations)) / 1E3
+  max_dist <- max(dists)
+  min_dist <- min(dists[dists!=0])
+  alpha <- x$alpha
+  betas <- t(data.frame(x$betas))
+  colnames(betas) <- paste0("beta_", 1:3) 
+  rownames(betas) <- NULL
+  # s_dist when t_dist=0
+  s_radiuses <- t(data.frame(max_dist*x$betas/x$alpha))
+  colnames(s_radiuses) <- paste0("s_radius_", 1:3)
+  rownames(s_radiuses) <- NULL
+ 
+  do.call(cbind, list(data.frame(data = names(inds_df)[i], min_dist = min_dist, max_dist = max_dist, alpha = alpha),  betas, s_radiuses))
+}))
+
+knitr::kable(dist_data, digits = 2)
+
+# print(xtable::xtable(dist_data[,c(1:4,8:10)]), include.rownames = F)
+```
+
+# Results
+
+```{r summarize-artif-results, eval=F}
+fs <- list.files(RES_PATH, recursive=T, full.names=T)
+fs <- fs[grep(grep("artif", fs))]
+  
+sumResTab_art <- list()
+for(f in 1:length(fs)){
+  print(fs[f])
+  load(fs[f])
+  sumRes_art <- summarizeAllArtifExps(all.res)
+  sumResTab_art[[f]] <- artifSumRes2Tab(sumRes_art)
+  rm(sumRes_art)
+  gc()
+}
+sumResTab_art <- dplyr::bind_rows(sumResTab_art) %>% 
+  mutate_at(.vars=vars(model:metric, fold), as.factor) %>%
+  select(model:lag_order, estimator, tr.perc:t.buffer, fold, metric, real, estimated)
+
+save(sumResTab_art, params, file=paste0(RES_PATH, "sumRes_artif.Rdata"))
+```
+
+
+```{r summarize-real-results, eval=F}
+fs <- list.files(RES_PATH, full.names=T)
+fs <- fs[grep(grep("real_res", fs))]
+
+ms <- stringr::str_split_fixed(fs, "_", 5)[,4, drop=T]
+ds <- stringr::str_split_fixed(fs, "_", n=5)[,5, drop=T]
+ds <- stringr::str_split_fixed(ds, "\\.", n=2)[,1, drop=T]
+
+IMBALANCED_DS <- c("MESApol", "NCDCPprec", "TCEQOozone",
+                   "TCEQTtemp", "RURALpm10",
+                   "BEIJno", "BEIJpm10", "BEIJwind", "BEIJpm25")
+
+sumResTab <- list()
+for(f in 1:length(fs)){
+  print(fs[f])
+  load(fs[f])
+  
+  sumRes <- summarize_one_exp(one_res)
+  sumRes$resTab$model <- ms[f]
+  sumRes$resTab$data <- ds[f]
+  sumResTab <- dplyr::bind_rows(sumResTab, sumRes$resTab)
+  params <- sumRes$params
+}
+sumResTab <- sumResTab %>% 
+  mutate_at(.vars=c("fold", "estimator", "model", "data", "metric"), as.factor) %>% 
+  select(estimator, model, data, fold, metric, real, estimated)
+
+save(sumResTab, params, file=paste0(RES_PATH, "sumRes_real.Rdata"))
+```
+
+
+## Artificial data sets
+
+### Median errors
+
+```{r summarize-artif-res}
+load(paste0(RES_PATH, "sumRes_artif.Rdata"))
+
+medResTab_art <- sumResTab_art %>% 
+  ungroup() %>%
+  # get right estimator names
+  mutate(orig_estimator = estimator,
+         procedure = ifelse(grepl("CV", estimator), "CV", 
+                            ifelse(grepl("PRE", estimator), "P", 
+                                   ifelse(grepl("MC", estimator), "MC",
+                                          "HO"))),
+         type = ifelse(grepl("CV", estimator), "CV", "OOS"),
+         estimator = ifelse(!is.na(fold.alloc.proc), 
+                            paste0(procedure, ".", abbr_fold_alloc_names(fold.alloc.proc)),
+                            paste0(procedure, paste0(".", stringr::str_pad(gsub("^0\\.", "", tr.perc), width = 2, pad="0", side = "right")),
+                                   ifelse(!is.na(ts.perc), paste0(".", stringr::str_pad(gsub("^0\\.", "", ts.perc), width = 2, pad="0", side = "right")), ""))),
+         buff_type = ifelse(!is.na(t.buffer) & !is.na(s.buffer), 
+                            ifelse(t.buffer==Inf & s.buffer==Inf, "_STM", "_ST"), 
+                            ifelse(!is.na(t.buffer), "_T", 
+                                   ifelse(!is.na(s.buffer), "_S", ""))),
+         procedure = estimator,
+         estimator = paste0(procedure, buff_type),
+         window = ifelse(window == "growing", "grW", "slW"),
+         estimator = ifelse(!is.na(window), paste0(estimator, "_", window), estimator),
+         estimator = ifelse(!is.na(removeSP), ifelse(removeSP, paste0(estimator, "_rmSP"), estimator), estimator)) %>%
+  unite("data", g_size:lag_order, remove = F) %>%
+  # calculate errors
+  group_by(data, model, g_size, t_size, gen_type, gen_order, gen_it, lag_order, type,
+           orig_estimator, estimator, procedure, window, buff_type, removeSP, metric) %>%
+  summarize(real = unique(real), 
+            estimated = median(estimated, na.rm=T), .groups="drop") %>%
+  ungroup() %>%
+  # calculate error metrics
+  mutate(Err = estimated - real, 
+         RelAbsErr = abs(estimated - real)/real,
+         RelErr = (estimated - real)/real,
+         AbsErr = abs(estimated - real))
+```
+
+```{r summarize-artif-res-mat}
+resMats_art_nmae <- medResTab_art %>% 
+  filter(metric=="nmae") %>%
+  select(data, model, estimator, AbsErr) %>%
+  pivot_wider(id_cols = c("data", "model"), names_from="estimator", values_from ="AbsErr")
+```
+
+```{r artif-nmae-err-boxplot, width=12, height=3}
+x <- medResTab_art %>%
+  filter(!grepl("rmSP", estimator),
+        !grepl("slW", estimator)) %>%
+  group_by(metric, estimator) %>%
+  mutate(med = mean(Err, na.rm=T),
+         sd = sd(Err, na.rm=T),
+         avgErr = ifelse(med>0, "pessimist", ifelse(med<0, "optimist", "acc")))  %>%
+  mutate(buffer = ifelse(type=="OOS", "OOS", paste0("CV", buff_type)))
+
+ggplot(x %>% filter(metric=="nmae", !is.na(Err)), 
+              aes(x=procedure, y=Err, color = avgErr)) + 
+  geom_boxplot(outlier.size = 0.5, notch = TRUE) + 
+  scale_color_manual(values=cbPal[c(2,1)]) +
+  facet_grid(.~buffer, scales = "free_x", space = "free_x") +
+  theme(text = element_text(size=20),
+        strip.text = element_text(angle = 90),
+          axis.text.x = element_text(angle = 90, hjust = 1 )) + 
+  geom_hline(yintercept=0, linetype = "dashed") 
+```
+
+**Figure 10.** Box plots of estimation errors incurred by cross-validation and out-of-sample procedures on 192 artificial datasets using  four learning algorithms.
+
+### Relative Errors
+
+```{r artif-nmae-relabserr-bar}
+x <- medResTab_art %>% 
+  filter(metric=="nmae",
+    !grepl("slW", estimator),
+    !grepl("rmSP", estimator)) %>%
+  mutate(Type=cut(RelAbsErr, 
+                  breaks = c(0,0.01,0.05,Inf),
+                  labels = c("[0,1]","]1,5]", ">5"),
+                  include.lowest=TRUE)) %>%
+   group_by(metric, type, buff_type, estimator, procedure, Type) %>%
+   summarize(nType = n(), .groups=c("drop_last")) %>%
+   mutate(frac = nType/sum(nType)) %>%
+   ungroup() %>%
+  mutate(buffer = ifelse(type=="OOS", "OOS", paste0("CV", buff_type)))
+
+ggplot(x, aes(x=procedure, y=frac, fill=Type)) + 
+  geom_bar(stat="identity") + 
+  facet_grid(.~buffer, space = "free_x", scales="free_x") +
+    theme(text = element_text(size=20),
+          axis.text.x = 
+            element_text(angle = 90, hjust = 1),
+          strip.text.x = element_text(angle=90)) +
+  scale_fill_brewer(palette="RdPu")
+  
+```
+
+**Figure 12a.** Bar plots of relative absolute estimation errors incurred by cross-validation and out-of-sample procedures on 192 artificial datasets using four learning algorithms. 
+
+
+```{r artif-nmae-relerr-bar}
+x <- medResTab_art %>% 
+  filter(!grepl("slW", estimator),
+    !grepl("rmSP", estimator)) %>%
+  mutate(Type=cut(RelErr, 
+                  breaks = c(-Inf,-0.05, -0.01, 0, 0.01, 0.05,Inf),
+                  labels = c("<-5","[-5,-1]","]-1,0]","]0,1]","]1,5]", ">5"),
+                  include.lowest=TRUE)) %>%
+   group_by(metric, type, estimator, procedure, buff_type, Type) %>%
+   summarize(nType = n(), .groups=c("drop_last")) %>%
+   mutate(frac = nType/sum(nType)) %>%
+   ungroup() %>%
+  mutate(buffer = ifelse(type=="OOS", "OOS", paste0("CV", buff_type)))
+
+ggplot(x %>% filter(metric=="nmae"), aes(x=procedure, y=frac, fill=Type)) + 
+  geom_bar(stat="identity") + 
+  facet_grid(.~buffer, space = "free_x", scales="free_x") +
+    theme(text = element_text(size=20),
+          axis.text.x = 
+            element_text(angle = 90, hjust = 1),
+          strip.text.x = element_text(angle=90)) +
+  scale_fill_brewer(palette="PuOr")
+```
+
+**Figure 13a.** Bar plots of relative absolute estimation errors incurred by cross-validation and out-of-sample procedures on 192 artificial datasets using four learning algorithms. Note the different legends.
+
+
+### Absolute errors
+
+**Table 4.** Average ranks of absolute errors, calculated separately for cross-validation and out-of-sample procedures when estimating performance on 192 artificial datasets.
+
+```{r artif-nmae-abs-avg-ranks}
+avg_ranks_art <- medResTab_art %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, type, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, type, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T), sd_r=sd(r, na.rm=T)) %>%
+  ungroup()
+
+avg_ranks_model_art <- medResTab_art %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, type, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, type, model, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("metric", "type", "estimator"), names_from="model", values_from = avg_r) %>%
+  left_join(avg_ranks_art %>% select(-type, -sd_r), by=c("metric", "estimator"))
+
+
+knitr::kable(avg_ranks_model_art %>% arrange(avg_r), digits=2)
+
+# print(xtable::xtable(avg_ranks_model_art %>% select(-metric) %>% mutate(estimator = gsub("buff", "", estimator)) %>% arrange(type)), include.rownames = F)
+```
+
+```{r artif-nmae-abserr-cd-diag, fig.width=12.5, fig.height=6, crop=T}
+  top5_cvs_art <- (avg_ranks_model_art %>% filter(type=="CV") %>% slice_min(avg_r, n=5) %>% ungroup() %>% select(estimator, avg_r))$estimator
+  top3_oos_art <- (avg_ranks_model_art %>% filter(type=="OOS") %>% mutate(OOS = ifelse(grepl("HO", estimator), "HO", ifelse(grepl("MC", estimator), "MC", "P"))) %>%
+                 group_by(OOS) %>% slice_min(avg_r, n=1) %>% ungroup() %>% select(estimator, avg_r))$estimator
+
+for(model in unique(medResTab_art$model)){
+  cat(paste0("\n\n####", model,"\n"))
+  resMat <- resMats_art_nmae %>%
+    filter(grepl(!!quo(UQ(model)), model))
+    r <- resMat[, union(c("CV.tRsR"), c(top5_cvs_art, top3_oos_art))]
+    colnames(r)<-gsub("\\_grW", "", colnames(r))
+    r <- r[complete.cases(r),]
+    scmamp::plotCD(r, decreasing=FALSE, cex=1.5)
+}
+
+```
+
+**Figure 14.** Critical difference diagram according to Friedman--Nemenyi test (at 5\% confidence level) for a subset of estimation procedures using 192 artificial datasets.
+
+
+
+```{r artif-nmae-abs-overall-avg-ranks}
+avg_ranks_art_overall <- medResTab_art %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T), sd_r=sd(r, na.rm=T)) %>%
+  ungroup()
+
+avg_ranks_model_art_overall <- medResTab_art %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, model, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("metric", "estimator"), names_from="model", values_from = avg_r) %>%
+  left_join(avg_ranks_art_overall %>% select(-sd_r), by=c("metric", "estimator"))
+
+
+# knitr::kable(avg_ranks_model_art_overall %>% arrange(avg_r), digits=2)
+```
+
+
+
+```{r artif-nmae-avgErr-avgRabsErr, fig.width=6, fig.height=6}
+x <- medResTab_art %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, data) %>%
+  mutate(r = rank(AbsErr)) %>%
+  group_by(estimator, metric) %>%
+  summarize(avg_r = mean(r, na.rm=T), avgErr = mean(Err, na.rm=T)) %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS"))
+
+ggplot(x, aes(x=avg_r, y=avgErr)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point() +
+  theme(legend.position="hide") +
+  ggrepel::geom_label_repel(aes(label = estimator, color = type), 
+                            min.segment.length = 0, 
+                            max.overlaps = 15) +
+  ylim(-0.00075, 0.003) + 
+  xlim(10, 17) +
+  xlab("avg_rank(AbsErr)")
+```
+
+**Figure 16a.** Average error against average rank of absolute errors for artificial data sets. Procedures below the dashed lined tend to be optimistic in their error estimates. Lower ranks indicate more accurate estimates in terms of absolute error.
+
+## Real data sets
+
+```{r summarize-real-sumres}
+load(paste0(RES_PATH, "sumRes_real.Rdata"))
+
+medResTab <- sumResTab %>% 
+  group_by(data, model, estimator) %>%
+  mutate(present = length(which(data %in% IMBALANCED_DS &
+                                metric=="rmse.phi" & 
+                                !is.na(estimated))),
+         include_in_f1 = ifelse((grepl("HO", estimator) & data %in% IMBALANCED_DS) | 
+                                  present >= 6, TRUE, FALSE)) %>%
+  select(-present) %>%
+  group_by(include_in_f1, data, model, estimator, metric) %>%
+  summarize(real = unique(real), 
+            estimated = median(estimated, na.rm=T), .groups="drop") %>%
+  mutate(estimator = abbr_fold_alloc_names(as.character(estimator)),
+    Err = estimated - real, 
+    RelAbsErr = abs(estimated - real)/real,
+    RelErr = (estimated - real)/real,
+    AbsErr = abs(estimated - real)) %>%
+  mutate(estimator = gsub("PRE\\.9", "P.", estimator),
+         estimator = gsub("CV\\.9", "CV.", estimator)) %>%
+  separate(estimator, "_", into=c("procedure", "buff_win", "rmSP"), 
+           remove=F, fill="right") %>%
+  mutate(buffer = ifelse(grepl("buff", buff_win), gsub("buff", "", buff_win), NA),
+         window = ifelse(grepl("W", buff_win), buff_win, NA)) %>%
+  mutate(estimator = gsub("buff", "", estimator)) %>%
+  select(-buff_win)
+  
+```
+
+### Median errors
+
+```{r real-nmae-err-boxplot, width=12, height=3}
+x <- medResTab %>%
+  filter(!grepl("rmSP", estimator),
+        !grepl("slW", estimator)) %>%
+  group_by(metric, estimator) %>%
+  mutate(avg = mean(Err, na.rm=T),
+         med = median(Err, na.rm=T),
+         sd = sd(Err, na.rm=T),
+         medErr = ifelse(med>0, "pessimist", ifelse(med<0, "optimist", "acc")),
+         avgErr = ifelse(avg>0, "pessimist", ifelse(avg<0, "optimist", "acc")),
+         avgRel = mean(RelErr, na.rm=T),
+         medRel = median(RelErr, na.rm=T),
+         sdRel = sd(RelErr, na.rm=T),
+         medRelErr = ifelse(medRel>0, "pessimist", ifelse(medRel<0, "optimist", "acc")),
+         avgRelErr = ifelse(avgRel>0, "pessimist", ifelse(avgRel<0, "optimist", "acc")))  %>%
+  mutate(buffer=ifelse(is.na(buffer) & grepl("CV", estimator), "CV", 
+                       ifelse(!grepl("(S|T)", buffer), "OOS", paste0("CV-", buffer))))
+
+ggplot(x %>% filter(!is.na(Err), metric =="nmae"),
+              aes(x=procedure, y=Err, color = medErr)) + 
+  geom_boxplot(outlier.size = 0.5, notch=TRUE) + 
+  #geom_violin() +
+  scale_color_manual(values=cbPal[c(2,1)]) +
+  facet_grid(.~buffer, scales = "free_x", space = "free_x") +
+  theme(text = element_text(size=20),
+        strip.text = element_text(angle = 90),
+          axis.text.x = element_text(angle = 90, hjust = 1 )) + 
+  geom_hline(yintercept=0, linetype = "dashed") +
+  ylim(-0.5,0.5) 
+```
+
+**Figure 11.** Box plots of estimation errors incurred by cross-validation and out-of-sample procedures on 17 real world datasets using four learning algorithms.
+
+### Relative Errors
+
+```{r real-nmae-relabserr-bar}
+x <- medResTab %>% 
+  filter(!grepl("slW", estimator),
+    !grepl("rmSP", estimator)) %>%
+  mutate(Type=cut(RelAbsErr, 
+                  breaks = c(0,0.1,0.3,Inf),
+                  labels = c("[0,10]","]10,30]", ">30"),
+                  include.lowest=TRUE)) %>%
+   group_by(metric, estimator, procedure, buffer, Type) %>%
+   summarize(nType = n(), .groups=c("drop_last")) %>%
+   mutate(frac = nType/sum(nType)) %>%
+   ungroup() %>%
+  mutate(buffer=ifelse(is.na(buffer) & !grepl("(H|MC|P)", estimator), 
+                       "CV", 
+                       ifelse(!grepl("(S|T)", buffer), "OOS", paste0("CV-", buffer)))) 
+
+ggplot(x %>% filter(metric=="nmae") %>%
+         mutate(procedure = gsub("\\.9\\_", "", procedure),
+                procedure = gsub("RE", "", procedure)), 
+       aes(x=procedure, y=frac, fill=Type)) + 
+  geom_bar(stat="identity") + 
+  facet_grid(.~buffer, space = "free_x", scales="free_x") +
+    theme(text = element_text(size=20),
+          axis.text.x = 
+            element_text(angle = 90, hjust = 1),
+          strip.text.x = element_text(angle=90)) +
+  scale_fill_brewer(palette="RdPu")
+```
+
+**Figure 12b.** Bar plots of relative absolute estimation errors incurred by cross-validation and out-of-sample procedures on 17 real-world datasets using four learning algorithms. 
+
+```{r real-nmae-relerr-bar}
+x <- medResTab %>% 
+  filter(!grepl("slW", estimator),
+    !grepl("rmSP", estimator)) %>%
+  mutate(Type=cut(RelErr, 
+                  breaks = c(-Inf,-0.3,-0.1,0,0.1,0.3,Inf),
+                  labels = c("<-30","[-30,-10]","]-10,0]","]0,10]","]10,30]", ">30"),
+                  include.lowest=TRUE)) %>%
+   group_by(metric, estimator, procedure, buffer, Type) %>%
+   summarize(nType = n(), .groups=c("drop_last")) %>%
+   mutate(frac = nType/sum(nType)) %>%
+   ungroup() %>%
+  mutate(buffer=ifelse(is.na(buffer) & !grepl("(H|MC|P)", estimator), 
+                       "CV", 
+                       ifelse(!grepl("(S|T)", buffer), "OOS", paste0("CV-", buffer)))) 
+
+ggplot(x %>% filter(metric=="nmae"), aes(x=procedure, y=frac, fill=Type)) + 
+  geom_bar(stat="identity") + 
+  facet_grid(.~buffer, space = "free_x", scales="free_x") +
+    theme(text = element_text(size=20),
+          axis.text.x = 
+            element_text(angle = 90, hjust = 1),
+          strip.text.x = element_text(angle=90)) +
+  scale_fill_brewer(palette="PuOr")
+```
+
+**Figure 13b.** Bar plots of relative absolute estimation errors incurred by cross-validation and out-of-sample procedures on 17 real-world datasets using four learning algorithms. Note the different legends.
+ 
+### Absolute errors
+
+**Table 5.** Average ranks of absolute errors, calculated separately for cross-validation and out-of-sample procedures when estimating performance on 17 real-world datasets.
+
+```{r real-nmae-abs-avg-ranks}
+avg_ranks <- medResTab %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS")) %>%
+  group_by(metric, model, type, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, type, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  ungroup()
+
+avg_ranks_model <- medResTab %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS")) %>%
+  group_by(metric, model, type, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, estimator, model, type) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  pivot_wider(names_from="model", values_from="avg_r") %>%
+  ungroup() %>%
+  left_join(avg_ranks)
+
+knitr::kable(avg_ranks_model %>% group_by(type) %>% select(type, estimator, lm:avg_r), digits=2)
+
+#print(xtable::xtable(avg_ranks_model %>% group_by(type) %>% select(type, estimator, earth:avg_r)), include.rownames = F)
+```
+
+```{r real-nmae-abs-overall-avg-ranks}
+avg_ranks_overall <- medResTab %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS")) %>%
+  group_by(metric, model, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, estimator) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  ungroup()
+
+avg_ranks_model_overall <- medResTab %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS")) %>%
+  group_by(metric, model, data) %>%
+  mutate(r=rank(AbsErr)) %>%
+  group_by(metric, estimator, model) %>%
+  summarize(avg_r=mean(r, na.rm=T)) %>%
+  pivot_wider(names_from="model", values_from="avg_r") %>%
+  ungroup() %>%
+  left_join(avg_ranks_overall)
+
+# knitr::kable(avg_ranks_model_overall %>% select(estimator, lm:avg_r), digits=2)
+```
+
+```{r real-nmae-abserr-cd-diag, fig.width=12.5, fig.height=6, crop=T}
+  top5_cvs <- (avg_ranks_model %>% filter(type=="CV") %>% arrange(avg_r) %>% slice_min(avg_r, n=5) %>% ungroup() %>% select(estimator, avg_r))$estimator
+  top3_oos <- (avg_ranks_model %>% filter(type=="OOS") %>% mutate(OOS = ifelse(grepl("HO", estimator), "HO", ifelse(grepl("MC", estimator), "MC", "P"))) %>%
+                 group_by(OOS) %>% slice_min(avg_r, n=1) %>% ungroup() %>% select(estimator, avg_r))$estimator
+  
+resMats_nmae <- medResTab %>% 
+  filter(metric=="nmae") %>%
+  select(data, include_in_f1, metric, model, estimator, AbsErr) %>%
+        pivot_wider(names_from="estimator", values_from="AbsErr")
+
+for(model in unique(medResTab$model)){
+  cat(paste0("\n\n####", model,"\n"))
+  resMat <- resMats_nmae %>%
+    filter(
+      grepl("nmae", metric),
+           grepl(!!quo(UQ(model)), model))
+  
+  
+    r <- resMat[, union(c("CV.tRsR"), c(top5_cvs, top3_oos)) ]
+    colnames(r)<-gsub("buff", "", colnames(r))
+    colnames(r)<-gsub("\\_grW", "", colnames(r))
+    colnames(r)<-gsub("\\.9\\_", "", colnames(r))
+    colnames(r)<-gsub("RE", "", colnames(r))
+    r <- r[complete.cases(r),]
+    scmamp::plotCD(r, decreasing=FALSE, cex=1.5)
+}
+```
+
+**Figure 15.** Critical difference diagram according to Friedman--Nemenyi test (at 5\% confidence level) for a subset of estimation procedures using real datasets.
+
+
+```{r real-nmae-avgErr-avgRabsErr, fig.width=6, fig.height=6}
+x <- medResTab %>% 
+  filter(!grepl("rmSP", estimator),
+         !grepl("slW", estimator),
+         metric=="nmae") %>%
+  group_by(metric, model, data) %>%
+  mutate(r = rank(AbsErr)) %>%
+  group_by(estimator, metric) %>%
+  summarize(avg_r = mean(r, na.rm=T), avgErr = mean(Err, na.rm=T)) %>%
+  mutate(type = ifelse(grepl("CV", estimator), "CV", "OOS"))
+
+ggplot(x, aes(x=avg_r, y=avgErr)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point() +
+  theme(legend.position="hide") +
+  ggrepel::geom_label_repel(aes(label = estimator, color = type), min.segment.length = 0) +
+  ylim(-0.06, 0.075) +
+  xlab("avg_rank(AbsErr)") 
+```
+
+
+**Figure 16b.** Average error against average rank of absolute errors for real-world data sets. Procedures below the dashed lined tend to be optimistic in their error estimates. Lower ranks indicate more accurate estimates in terms of absolute error.
