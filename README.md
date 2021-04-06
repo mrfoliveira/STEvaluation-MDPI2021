@@ -4,7 +4,9 @@ This repository contains the research compendium of "Evaluation procedures for f
 
 You are free to use and/or adapt the code we freely provide. However, we do require that if you do that you cite the paper where these results and code were published:
 
-Oliveira M, Torgo L, Santos Costa V. Evaluation Procedures for Forecasting with Spatiotemporal Data. *Mathematics*. 2021; 9(6):691. https://doi.org/10.3390/math9060691
+**Oliveira M, Torgo L, Santos Costa V. Evaluation Procedures for Forecasting with Spatiotemporal Data. *Mathematics*. 2021; 9(6):691. https://doi.org/10.3390/math9060691**
+
+BibTeX citation:
 
 @Article{Oliveira2021, AUTHOR = {Oliveira, Mariana and Torgo, Luís and Santos Costa, Vítor}, TITLE = {Evaluation Procedures for Forecasting with Spatiotemporal Data}, JOURNAL = {Mathematics}, VOLUME = {9}, YEAR = {2021}, NUMBER = {6}, ARTICLE-NUMBER = {691}, URL = {https://www.mdpi.com/2227-7390/9/6/691}, ISSN = {2227-7390}, DOI = {10.3390/math9060691}}
 
