@@ -1,4 +1,4 @@
-# Evaluation Procedures for Forecasting with Spatiotemporal Data
+# Evaluation Procedures for Forecasting with Spatiotemporal Data (Extension)
 
 This repository contains the research compendium of "Evaluation procedures for forecasting with spatiotemporal data", authored by Mariana Oliveira, Luis Torgo, and Vitor Santos Costa, and published at the Mathematics Journal, on the Special Issue "Spatial Statistics and Its Application".
 
