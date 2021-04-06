@@ -8,7 +8,7 @@ You are free to use and/or adapt the code we freely provide. However, we do requ
 
 BibTeX citation:
 
-@Article{Oliveira2021, AUTHOR = {Oliveira, Mariana and Torgo, Luís and Santos Costa, Vítor}, TITLE = {Evaluation Procedures for Forecasting with Spatiotemporal Data}, JOURNAL = {Mathematics}, VOLUME = {9}, YEAR = {2021}, NUMBER = {6}, ARTICLE-NUMBER = {691}, URL = {https://www.mdpi.com/2227-7390/9/6/691}, ISSN = {2227-7390}, DOI = {10.3390/math9060691}}
+@Article{Oliveira2021, author = {Oliveira, Mariana and Torgo, Luís and Santos Costa, Vítor}, title = {Evaluation Procedures for Forecasting with Spatiotemporal Data}, journal = {Mathematics}, volume = {9}, year = {2021}, number = {6}, article-number = {691}, url = {https://www.mdpi.com/2227-7390/9/6/691}, issn = {2227-7390}, doi = {10.3390/math9060691}}
 
 
 This article is an extended version of a conference paper presented at ECML-PKDD 2018 and published as:
